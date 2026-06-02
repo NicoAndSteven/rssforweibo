@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "description": "RSSHub deployed on Vercel",
   "scripts": {
-    "dev": "vercel dev",
-    "build": "tsc"
+    "dev": "vercel dev"
   },
   "dependencies": {
     "@vercel/node": "^3.0.0",
@@ -17,8 +16,5 @@
     "@types/rss": "^0.0.32",
     "typescript": "^5.0.0",
     "vercel": "^33.0.0"
-  },
-  "engines": {
-    "node": ">=18"
   }
 }
