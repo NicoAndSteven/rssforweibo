@@ -31,8 +31,8 @@ export function generateRSS(options: RSSFeedOptions, items: RSSItem[]): string {
   const feed = new RSS({
     title: options.title,
     description: options.description || '',
-    feed_url: options.feed_url,
-    site_url: options.site_url,
+    feed_url: options.feed_url || '',
+    site_url: options.site_url || '',
     image_url: options.image_url,
     language: options.language || 'zh-CN',
     ttl: options.ttl || 60,
@@ -44,7 +44,7 @@ export function generateRSS(options: RSSFeedOptions, items: RSSItem[]): string {
     feed.item({
       title: item.title,
       description: item.description || '',
-      url: item.url,
+      url: item.url || '',
       guid: item.guid,
       categories: item.categories,
       author: item.author,

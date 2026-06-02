@@ -77,7 +77,7 @@ export async function fetchWeiboKeyword(keyword: string): Promise<WeiboPost[]> {
 
 function cleanText(html: string): string {
   const $ = cheerio.load(html);
-  return $.text(html).trim();
+  return $.text().trim();
 }
 
 function parseWeiboTime(timeStr: string): Date {
