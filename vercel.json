@@ -1,18 +1,8 @@
 {
-  "version": 2,
-  "routes": [
+  "rewrites": [
     {
-      "src": "/",
-      "dest": "/api/index"
-    },
-    {
-      "src": "/weibo/keyword/(?<keyword>[^/]+)",
-      "dest": "/api/weibo/keyword/$keyword"
+      "source": "/weibo/keyword/:keyword",
+      "destination": "/api/weibo/keyword/:keyword"
     }
-  ],
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "nodejs20.x"
-    }
-  }
+  ]
 }

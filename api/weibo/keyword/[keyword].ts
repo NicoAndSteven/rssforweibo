@@ -1,8 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { fetchWeiboKeyword } from '../../../lib/weibo';
 import { generateRSS, RSSItem } from '../../../lib/rss';
+import { validateAuth, createAuthError } from '../../../lib/config';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const authHeader = req.headers.authorization;
+  const queryCode = req.query.code as string | undefined;
+  
+  if (!validateAuth(authHeader || queryCode)) {
+    res.status(401).json(createAuthError());
+    return;
+  }
+
   const { keyword } = req.query;
 
   if (!keyword || typeof keyword !== 'string') {

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import { config } from './config';
 
 export interface WeiboPost {
   id: string;
@@ -16,14 +17,23 @@ const WEIBO_MOBILE_SEARCH_URL = 'https://m.weibo.cn/search';
 export async function fetchWeiboKeyword(keyword: string): Promise<WeiboPost[]> {
   try {
     const encodedKeyword = encodeURIComponent(keyword);
-    const response = await axios.get(`${WEIBO_MOBILE_SEARCH_URL}?containerid=100103type%3D1%26q%3D${encodedKeyword}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-        'Referer': 'https://m.weibo.cn/',
-        'Accept': 'application/json, text/plain, */*',
-      },
-      timeout: 10000,
-    });
+    const headers: Record<string, string> = {
+      'User-Agent': config.userAgent,
+      'Referer': 'https://m.weibo.cn/',
+      'Accept': 'application/json, text/plain, */*',
+    };
+    
+    if (config.weiboCookie) {
+      headers['Cookie'] = config.weiboCookie;
+    }
+    
+    const response = await axios.get(
+      `${WEIBO_MOBILE_SEARCH_URL}?containerid=100103type%3D1%26q%3D${encodedKeyword}`,
+      {
+        headers,
+        timeout: config.requestTimeout,
+      }
+    );
 
     const data = response.data;
     const posts: WeiboPost[] = [];
@@ -42,13 +52,25 @@ export async function fetchWeiboKeyword(keyword: string): Promise<WeiboPost[]> {
             images: extractImages(mblog),
           };
           posts.push(post);
+          
+          if (posts.length >= config.maxItems) {
+            break;
+          }
         }
       }
     }
 
     return posts;
   } catch (error) {
-    console.error('Error fetching weibo keyword:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('Weibo API Error:', {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+      });
+    } else {
+      console.error('Error fetching weibo keyword:', error);
+    }
     return [];
   }
 }
