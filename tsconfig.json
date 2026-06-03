@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["ES2020"],
+    "target": "ES2022",
+    "module": "ES2022",
+    "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./",
     "strict": true,
@@ -10,11 +10,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
     "sourceMap": true,
-    "moduleResolution": "node"
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"]
   },
-  "include": ["api/**/*", "lib/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["functions/**/*", "lib/**/*"],
+  "exclude": ["node_modules", "dist", "public"]
 }

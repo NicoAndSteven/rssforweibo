@@ -1,6 +1,12 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+interface Env {
+  AUTH_CODE?: string;
+  WEIBO_COOKIE?: string;
+  REQUEST_TIMEOUT?: string;
+  MAX_ITEMS?: string;
+  USER_AGENT?: string;
+}
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export const onRequestGet: PagesFunction<Env> = async (context) => {
   const routes = [
     {
       path: '/',
@@ -13,11 +19,11 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     },
   ];
 
-  res.status(200).json({
-    name: 'RSSHub Vercel',
+  return Response.json({
+    name: 'RSSHub Cloudflare',
     version: '1.0.0',
-    description: 'RSSHub deployed on Vercel',
+    description: 'RSSHub deployed on Cloudflare Pages',
     routes,
     documentation: 'https://docs.rsshub.app',
   });
-}
+};

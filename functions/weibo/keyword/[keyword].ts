@@ -1,35 +1,41 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createConfig, validateAuth, createAuthError } from '../../../lib/config';
 import { fetchWeiboKeyword } from '../../../lib/weibo';
 import { generateRSS, RSSItem } from '../../../lib/rss';
-import { validateAuth, createAuthError } from '../../../lib/config';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const authHeader = req.headers.authorization;
-  const queryCode = req.query.code as string | undefined;
-  
-  if (!validateAuth(authHeader || queryCode)) {
-    res.status(401).json(createAuthError());
-    return;
+interface Env {
+  AUTH_CODE?: string;
+  WEIBO_COOKIE?: string;
+  REQUEST_TIMEOUT?: string;
+  MAX_ITEMS?: string;
+  USER_AGENT?: string;
+}
+
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const cfg = createConfig(context.env as unknown as Record<string, string | undefined>);
+  const url = new URL(context.request.url);
+  const authHeader = context.request.headers.get('Authorization') || undefined;
+  const queryCode = url.searchParams.get('code') || undefined;
+
+  if (!validateAuth(authHeader || queryCode, cfg)) {
+    return Response.json(createAuthError(), { status: 401 });
   }
 
-  const { keyword } = req.query;
+  const keyword = context.params.keyword as string;
 
-  if (!keyword || typeof keyword !== 'string') {
-    res.status(400).json({
+  if (!keyword) {
+    return Response.json({
       error: 'Missing keyword parameter',
       usage: '/weibo/keyword/:keyword',
       example: '/weibo/keyword/王一博',
-    });
-    return;
+    }, { status: 400 });
   }
 
   try {
     const decodedKeyword = decodeURIComponent(keyword);
-    const posts = await fetchWeiboKeyword(decodedKeyword);
+    const posts = await fetchWeiboKeyword(decodedKeyword, cfg);
 
     if (posts.length === 0) {
-      res.status(200).setHeader('Content-Type', 'application/xml');
-      res.send(generateRSS(
+      const rss = generateRSS(
         {
           title: `微博搜索: ${decodedKeyword}`,
           description: `微博关键词 "${decodedKeyword}" 的搜索结果`,
@@ -37,8 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           language: 'zh-CN',
         },
         []
-      ));
-      return;
+      );
+
+      return new Response(rss, {
+        headers: { 'Content-Type': 'application/xml' },
+      });
     }
 
     const items: RSSItem[] = posts.map((post) => {
@@ -63,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rss = generateRSS(
       {
         title: `微博搜索: ${decodedKeyword}`,
-        description: `微博关键词 "${decodedKeyword}" 的搜索结果 - 由 RSSHub Vercel 提供`,
+        description: `微博关键词 "${decodedKeyword}" 的搜索结果 - 由 RSSHub Cloudflare 提供`,
         site_url: 'https://weibo.com',
         language: 'zh-CN',
         ttl: 10,
@@ -71,13 +80,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       items
     );
 
-    res.status(200).setHeader('Content-Type', 'application/xml');
-    res.send(rss);
+    return new Response(rss, {
+      headers: { 'Content-Type': 'application/xml' },
+    });
   } catch (error) {
     console.error('Error in weibo keyword handler:', error);
-    res.status(500).json({
+    return Response.json({
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }, { status: 500 });
   }
-}
+};

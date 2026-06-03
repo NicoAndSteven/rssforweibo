@@ -1,6 +1,6 @@
-# RSSHub Vercel
+# RSSHub Cloudflare
 
-基于 Vercel 平台部署的 RSSHub 服务，提供微博等平台的 RSS 订阅功能。
+基于 Cloudflare Pages 部署的 RSSHub 服务，提供微博等平台的 RSS 订阅功能。
 
 ## 功能
 
@@ -12,11 +12,12 @@
 
 ## 快速部署
 
-### 方式一：一键部署
+### 前置条件
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
+1. 注册 [Cloudflare](https://dash.cloudflare.com/sign-up) 账号
+2. 安装 [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
 
-### 方式二：手动部署
+### 方式一：命令行部署
 
 1. **克隆项目**
    ```bash
@@ -29,14 +30,35 @@
    npm install
    ```
 
-3. **部署到 Vercel**
+3. **登录 Cloudflare**
    ```bash
-   npx vercel
+   npx wrangler login
    ```
+
+4. **本地开发**
+   ```bash
+   npm run dev
+   ```
+   服务将在 `http://localhost:8788` 启动。
+
+5. **部署到生产**
+   ```bash
+   npm run deploy
+   ```
+
+### 方式二：Dashboard 部署
+
+1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
+2. 进入 Workers & Pages → Create → Pages → Connect to Git
+3. 选择你的仓库
+4. 配置：
+   - Build command: `echo "No build needed"`
+   - Build output directory: `public`
+5. 点击 Save and Deploy
 
 ## 环境变量配置
 
-在 Vercel 部署时，点击 **Environment Variables** 展开配置区域：
+在 Cloudflare Dashboard → Pages → 你的项目 → Settings → Environment variables 中配置：
 
 | 变量名 | 必填 | 说明 | 默认值 |
 |--------|------|------|--------|
@@ -65,7 +87,7 @@ Authorization: Bearer mysecretcode123
 
 **方式二：Query Parameter**
 ```
-https://你的域名.vercel.app/weibo/keyword/王一博?code=mysecretcode123
+https://你的域名.pages.dev/weibo/keyword/王一博?code=mysecretcode123
 ```
 
 ## API 路由
@@ -82,105 +104,87 @@ https://你的域名.vercel.app/weibo/keyword/王一博?code=mysecretcode123
 获取王一博相关微博的 RSS 订阅：
 
 ```
-https://你的域名.vercel.app/weibo/keyword/王一博
-```
-
-获取肖战相关微博的 RSS 订阅：
-
-```
-https://你的域名.vercel.app/weibo/keyword/肖战
+https://你的域名.pages.dev/weibo/keyword/王一博
 ```
 
 ### 在 RSS 阅读器中添加
 
-将上述 URL 添加到任意 RSS 阅读器即可订阅，支持：
-- Feedly
-- Inoreader
-- Reeder
-- 以及其他标准 RSS 阅读器
+将上述 URL 添加到任意 RSS 阅读器即可订阅，支持 Feedly、Inoreader、Reeder 等。
 
 ## 本地开发
 
 ```bash
 npm install
-npx vercel dev
+npm run dev
 ```
 
-服务将在 `http://localhost:3000` 启动。
+服务将在 `http://localhost:8788` 启动。
 
 ## 项目结构
 
 ```
-├── api/
+├── functions/
 │   ├── index.ts              # API 首页
 │   └── weibo/keyword/
 │       └── [keyword].ts      # 微博关键词路由
 ├── lib/
-│   ├── config.ts             # 环境变量配置
+│   ├── config.ts             # 环境变量配置 + 权限校验
 │   ├── rss.ts                # RSS 生成工具
 │   └── weibo.ts              # 微博数据抓取
+├── public/                   # 静态资源目录
+├── wrangler.toml             # Cloudflare 配置
 ├── package.json
-├── tsconfig.json
-├── vercel.json               # Vercel 配置
-└── .env.example              # 环境变量示例
+└── tsconfig.json
 ```
 
-## Vercel 部署注意事项
+## Cloudflare 部署注意事项
 
-### 1. 构建与输出设置
+### 1. 运行时限制
 
-- 项目类型识别为 **Other**，这是正常的
-- 无需手动配置 Build Command
-- Vercel 会自动识别 `api/` 目录下的 Serverless Functions
+- Cloudflare Workers 使用 V8 引擎，不支持 Node.js 原生 API
+- 本项目已适配：使用 `fetch()` 替代 `axios`，手写 XML 替代 `rss` 包
+- 免费计划 CPU 时间限制为 10ms/请求（网络 I/O 不计入）
 
-### 2. 超时限制
+### 2. 环境变量
 
-Vercel Hobby（免费）账户的 Serverless Functions 超时限制为 **10 秒**。
+- 敏感变量（`AUTH_CODE`、`WEIBO_COOKIE`）建议使用 `wrangler secret put` 或 Dashboard 加密存储
+- 非敏感变量直接在 Dashboard 的 Environment variables 中配置
 
-**已优化措施：**
-- 请求超时默认设为 8 秒（留出缓冲时间）
-- 单次返回条数限制为 20 条
-- 如遇超时，可减小 `MAX_ITEMS` 或 `REQUEST_TIMEOUT`
+### 3. 自定义域名
 
-### 3. 根目录
-
-确保 `package.json` 在仓库根目录下。当前配置已正确。
-
-### 4. 冷启动
-
-Serverless Functions 有冷启动现象，首次请求可能较慢。后续请求会更快。
-
-## 注意事项
-
-- 微博数据来源于移动端接口，可能有访问限制
-- RSS 缓存时间为 10 分钟
-- 如遇频繁限制，可配置 `WEIBO_COOKIE` 提高访问权限
-- 建议设置 `AUTH_CODE` 防止接口被滥用
+在 Cloudflare Dashboard → Pages → 你的项目 → Custom domains 中添加自定义域名。
 
 ## 扩展开发
 
 ### 添加新的路由
 
-1. 在 `api/` 目录下创建新的路由文件
+1. 在 `functions/` 目录下创建新的路由文件
 2. 在 `lib/` 目录下添加对应的数据抓取逻辑
-3. 在 `vercel.json` 中添加路由规则
+3. 导出 `onRequestGet: PagesFunction<Env>` 处理函数
 
 ### 示例：添加 Bilibili 路由
 
 ```typescript
-// api/bilibili/user/[uid].ts
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { validateAuth, createAuthError } from '../../../lib/config';
+// functions/bilibili/user/[uid].ts
+import { createConfig, validateAuth, createAuthError } from '../../../lib/config';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (!validateAuth(req.headers.authorization)) {
-    res.status(401).json(createAuthError());
-    return;
-  }
-  
-  const { uid } = req.query;
-  // 实现逻辑...
+interface Env {
+  AUTH_CODE?: string;
 }
+
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const cfg = createConfig(context.env);
+  const authHeader = context.request.headers.get('Authorization') || undefined;
+  const url = new URL(context.request.url);
+  const queryCode = url.searchParams.get('code') || undefined;
+
+  if (!validateAuth(authHeader || queryCode, cfg)) {
+    return Response.json(createAuthError(), { status: 401 });
+  }
+
+  const uid = context.params.uid as string;
+  // 实现逻辑...
+};
 ```
 
 ## License

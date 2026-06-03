@@ -1,6 +1,4 @@
-import axios from 'axios';
-import * as cheerio from 'cheerio';
-import { config } from './config';
+import { config, Config } from './config';
 
 export interface WeiboPost {
   id: string;
@@ -14,28 +12,36 @@ export interface WeiboPost {
 
 const WEIBO_MOBILE_SEARCH_URL = 'https://m.weibo.cn/search';
 
-export async function fetchWeiboKeyword(keyword: string): Promise<WeiboPost[]> {
+export async function fetchWeiboKeyword(keyword: string, cfg: Config = config): Promise<WeiboPost[]> {
   try {
     const encodedKeyword = encodeURIComponent(keyword);
     const headers: Record<string, string> = {
-      'User-Agent': config.userAgent,
+      'User-Agent': cfg.userAgent,
       'Referer': 'https://m.weibo.cn/',
       'Accept': 'application/json, text/plain, */*',
     };
-    
-    if (config.weiboCookie) {
-      headers['Cookie'] = config.weiboCookie;
+
+    if (cfg.weiboCookie) {
+      headers['Cookie'] = cfg.weiboCookie;
     }
-    
-    const response = await axios.get(
+
+    const response = await fetch(
       `${WEIBO_MOBILE_SEARCH_URL}?containerid=100103type%3D1%26q%3D${encodedKeyword}`,
       {
         headers,
-        timeout: config.requestTimeout,
+        signal: AbortSignal.timeout(cfg.requestTimeout),
       }
     );
 
-    const data = response.data;
+    if (!response.ok) {
+      console.error('Weibo API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+      });
+      return [];
+    }
+
+    const data: any = await response.json();
     const posts: WeiboPost[] = [];
 
     if (data?.data?.cards) {
@@ -52,8 +58,8 @@ export async function fetchWeiboKeyword(keyword: string): Promise<WeiboPost[]> {
             images: extractImages(mblog),
           };
           posts.push(post);
-          
-          if (posts.length >= config.maxItems) {
+
+          if (posts.length >= cfg.maxItems) {
             break;
           }
         }
@@ -62,50 +68,41 @@ export async function fetchWeiboKeyword(keyword: string): Promise<WeiboPost[]> {
 
     return posts;
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      console.error('Weibo API Error:', {
-        message: error.message,
-        code: error.code,
-        status: error.response?.status,
-      });
-    } else {
-      console.error('Error fetching weibo keyword:', error);
-    }
+    console.error('Error fetching weibo keyword:', error);
     return [];
   }
 }
 
 function cleanText(html: string): string {
-  const $ = cheerio.load(html);
-  return $.text().trim();
+  return html.replace(/<[^>]*>/g, '').trim();
 }
 
 function parseWeiboTime(timeStr: string): Date {
   if (!timeStr) return new Date();
-  
+
   const now = new Date();
-  
+
   if (timeStr.includes('刚刚')) {
     return now;
   }
-  
+
   const minuteMatch = timeStr.match(/(\d+)分钟前/);
   if (minuteMatch) {
     return new Date(now.getTime() - parseInt(minuteMatch[1]) * 60 * 1000);
   }
-  
+
   const hourMatch = timeStr.match(/(\d+)小时前/);
   if (hourMatch) {
     return new Date(now.getTime() - parseInt(hourMatch[1]) * 60 * 60 * 1000);
   }
-  
+
   const todayMatch = timeStr.match(/今天\s*(\d{2}):(\d{2})/);
   if (todayMatch) {
     const date = new Date(now);
     date.setHours(parseInt(todayMatch[1]), parseInt(todayMatch[2]), 0, 0);
     return date;
   }
-  
+
   const dateMatch = timeStr.match(/(\d{1,2})月(\d{1,2})日\s*(\d{2}):(\d{2})/);
   if (dateMatch) {
     const month = parseInt(dateMatch[1]) - 1;
@@ -118,13 +115,13 @@ function parseWeiboTime(timeStr: string): Date {
     }
     return date;
   }
-  
+
   return new Date(timeStr);
 }
 
 function extractImages(mblog: any): string[] {
   const images: string[] = [];
-  
+
   if (mblog.pics && Array.isArray(mblog.pics)) {
     for (const pic of mblog.pics) {
       if (pic.url) {
@@ -132,6 +129,6 @@ function extractImages(mblog: any): string[] {
       }
     }
   }
-  
+
   return images;
 }

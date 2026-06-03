@@ -1,20 +1,15 @@
 {
-  "name": "rsshub-vercel",
+  "name": "rsshub-cloudflare",
   "version": "1.0.0",
-  "description": "RSSHub deployed on Vercel",
+  "description": "RSSHub deployed on Cloudflare Pages",
   "scripts": {
-    "dev": "vercel dev"
-  },
-  "dependencies": {
-    "@vercel/node": "^3.0.0",
-    "axios": "^1.6.0",
-    "cheerio": "^1.0.0-rc.12",
-    "rss": "^1.2.2"
+    "dev": "wrangler pages dev",
+    "deploy": "wrangler pages deploy",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/rss": "^0.0.32",
+    "@cloudflare/workers-types": "^4.0.0",
     "typescript": "^5.0.0",
-    "vercel": "^33.0.0"
+    "wrangler": "^3.0.0"
   }
 }
