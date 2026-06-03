@@ -41,7 +41,7 @@ RSSHub Cloudflare — a lightweight RSSHub deployment using Cloudflare Pages Fun
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
 | `AUTH_CODE` | No | empty (public) | Access password via Bearer token or `?code=` query param |
-| `WEIBO_COOKIE` | No | empty | Weibo cookie for higher rate limits |
+| `WEIBO_COOKIE` | No | empty (auto visitor) | Weibo cookie override; auto-generates visitor cookie if unset |
 | `MAX_ITEMS` | No | `20` | Max results per request |
 | `REQUEST_TIMEOUT` | No | `8000` | HTTP request timeout in ms |
 | `USER_AGENT` | No | iPhone UA string | HTTP User-Agent header |

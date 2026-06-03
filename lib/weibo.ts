@@ -1,4 +1,4 @@
-import { config, Config } from './config';
+import { Config } from './config';
 
 export interface WeiboPost {
   id: string;
@@ -10,23 +10,70 @@ export interface WeiboPost {
   url: string;
 }
 
-const WEIBO_MOBILE_SEARCH_URL = 'https://m.weibo.cn/search';
+const WEIBO_SEARCH_URL = 'https://weibo.com/ajax/statuses/search';
+const VISITOR_GEN_URL = 'https://passport.weibo.com/visitor/genvisitor';
+const VISITOR_INCARNATE_URL = 'https://passport.weibo.com/visitor/visitor';
 
-export async function fetchWeiboKeyword(keyword: string, cfg: Config = config): Promise<WeiboPost[]> {
+let visitorCookie = '';
+let visitorCookieExpires = 0;
+
+async function getVisitorCookie(): Promise<string> {
+  if (visitorCookie && Date.now() < visitorCookieExpires) {
+    return visitorCookie;
+  }
+
+  const tidResp = await fetch(VISITOR_GEN_URL, {
+    method: 'POST',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'cb=gen_callback&fp=%7B%7D',
+  });
+
+  const tidText = await tidResp.text();
+  const tidMatch = tidText.match(/"tid":"([^"]+)"/);
+  if (!tidMatch) {
+    throw new Error('Failed to get visitor tid');
+  }
+  const tid = tidMatch[1];
+
+  const incResp = await fetch(
+    `${VISITOR_INCARNATE_URL}?a=incarnate&t=${tid}&w=2&c=095&gc=&cb=cross_domain&from=weibo`,
+    {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+      redirect: 'manual',
+    }
+  );
+
+  const incText = await incResp.text();
+  const subMatch = incText.match(/"sub":"([^"]+)"/);
+  const subpMatch = incText.match(/"subp":"([^"]+)"/);
+
+  if (!subMatch || !subpMatch) {
+    throw new Error('Failed to get visitor cookies');
+  }
+
+  visitorCookie = `SUB=${subMatch[1]}; SUBP=${subpMatch[1]}`;
+  visitorCookieExpires = Date.now() + 3 * 60 * 60 * 1000;
+  return visitorCookie;
+}
+
+export async function fetchWeiboKeyword(keyword: string, cfg: Config): Promise<WeiboPost[]> {
   try {
-    const encodedKeyword = encodeURIComponent(keyword);
+    const cookie = cfg.weiboCookie || await getVisitorCookie();
+
     const headers: Record<string, string> = {
       'User-Agent': cfg.userAgent,
-      'Referer': 'https://m.weibo.cn/',
+      'Referer': 'https://weibo.com/',
       'Accept': 'application/json, text/plain, */*',
+      'Cookie': cookie,
     };
 
-    if (cfg.weiboCookie) {
-      headers['Cookie'] = cfg.weiboCookie;
-    }
-
     const response = await fetch(
-      `${WEIBO_MOBILE_SEARCH_URL}?containerid=100103type%3D1%26q%3D${encodedKeyword}`,
+      `${WEIBO_SEARCH_URL}?q=${encodeURIComponent(keyword)}&page=1`,
       {
         headers,
         signal: AbortSignal.timeout(cfg.requestTimeout),
@@ -44,24 +91,21 @@ export async function fetchWeiboKeyword(keyword: string, cfg: Config = config): 
     const data: any = await response.json();
     const posts: WeiboPost[] = [];
 
-    if (data?.data?.cards) {
-      for (const card of data.data.cards) {
-        if (card.card_type === 9 && card.mblog) {
-          const mblog = card.mblog;
-          const post: WeiboPost = {
-            id: mblog.id || mblog.mid,
-            text: cleanText(mblog.text || ''),
-            author: mblog.user?.screen_name || '未知用户',
-            authorAvatar: mblog.user?.profile_image_url,
-            createdAt: parseWeiboTime(mblog.created_at),
-            url: `https://m.weibo.cn/detail/${mblog.id || mblog.mid}`,
-            images: extractImages(mblog),
-          };
-          posts.push(post);
+    if (data?.statuses) {
+      for (const status of data.statuses) {
+        const post: WeiboPost = {
+          id: status.idstr || String(status.id),
+          text: cleanText(status.text_raw || status.text || ''),
+          author: status.user?.screen_name || '未知用户',
+          authorAvatar: status.user?.profile_image_url,
+          createdAt: new Date(status.created_at),
+          url: `https://weibo.com/${status.user?.id || ''}/${status.mblogid || status.id}`,
+          images: extractImages(status),
+        };
+        posts.push(post);
 
-          if (posts.length >= cfg.maxItems) {
-            break;
-          }
+        if (posts.length >= cfg.maxItems) {
+          break;
         }
       }
     }
@@ -77,55 +121,13 @@ function cleanText(html: string): string {
   return html.replace(/<[^>]*>/g, '').trim();
 }
 
-function parseWeiboTime(timeStr: string): Date {
-  if (!timeStr) return new Date();
-
-  const now = new Date();
-
-  if (timeStr.includes('刚刚')) {
-    return now;
-  }
-
-  const minuteMatch = timeStr.match(/(\d+)分钟前/);
-  if (minuteMatch) {
-    return new Date(now.getTime() - parseInt(minuteMatch[1]) * 60 * 1000);
-  }
-
-  const hourMatch = timeStr.match(/(\d+)小时前/);
-  if (hourMatch) {
-    return new Date(now.getTime() - parseInt(hourMatch[1]) * 60 * 60 * 1000);
-  }
-
-  const todayMatch = timeStr.match(/今天\s*(\d{2}):(\d{2})/);
-  if (todayMatch) {
-    const date = new Date(now);
-    date.setHours(parseInt(todayMatch[1]), parseInt(todayMatch[2]), 0, 0);
-    return date;
-  }
-
-  const dateMatch = timeStr.match(/(\d{1,2})月(\d{1,2})日\s*(\d{2}):(\d{2})/);
-  if (dateMatch) {
-    const month = parseInt(dateMatch[1]) - 1;
-    const day = parseInt(dateMatch[2]);
-    const hour = parseInt(dateMatch[3]);
-    const minute = parseInt(dateMatch[4]);
-    const date = new Date(now.getFullYear(), month, day, hour, minute);
-    if (date > now) {
-      date.setFullYear(date.getFullYear() - 1);
-    }
-    return date;
-  }
-
-  return new Date(timeStr);
-}
-
-function extractImages(mblog: any): string[] {
+function extractImages(status: any): string[] {
   const images: string[] = [];
 
-  if (mblog.pics && Array.isArray(mblog.pics)) {
-    for (const pic of mblog.pics) {
-      if (pic.url) {
-        images.push(pic.url.replace(/\/thumbnail\//, '/large/'));
+  if (status.pic_ids && Array.isArray(status.pic_ids)) {
+    for (const picId of status.pic_ids) {
+      if (picId) {
+        images.push(`https://wx1.sinaimg.cn/large/${picId}.jpg`);
       }
     }
   }

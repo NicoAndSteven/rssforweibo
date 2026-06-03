@@ -63,7 +63,7 @@
 | 变量名 | 必填 | 说明 | 默认值 |
 |--------|------|------|--------|
 | `AUTH_CODE` | 否 | 访问密码，设置后需要在请求时携带 | 空（公开访问） |
-| `WEIBO_COOKIE` | 否 | 微博 Cookie，用于获取更多数据 | 空 |
+| `WEIBO_COOKIE` | 否 | 微博 Cookie（可选，不设置则自动生成访客 Cookie） | 空 |
 | `REQUEST_TIMEOUT` | 否 | 请求超时时间（毫秒） | `8000` |
 | `MAX_ITEMS` | 否 | 单次返回最大条数 | `20` |
 | `USER_AGENT` | 否 | 请求 User-Agent | iPhone UA |
@@ -147,7 +147,8 @@ npm run dev
 
 ### 2. 环境变量
 
-- 敏感变量（`AUTH_CODE`、`WEIBO_COOKIE`）建议使用 `wrangler secret put` 或 Dashboard 加密存储
+- 敏感变量（`AUTH_CODE`）建议使用 `wrangler secret put` 或 Dashboard 加密存储
+- `WEIBO_COOKIE` 可选 — 不设置时自动生成访客 Cookie（缓存 3 小时，自动刷新）
 - 非敏感变量直接在 Dashboard 的 Environment variables 中配置
 
 ### 3. 自定义域名
